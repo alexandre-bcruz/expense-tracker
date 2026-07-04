@@ -1,0 +1,53 @@
+#!/bin/sh
+#
+# commit-msg hook: enforce Conventional Commits.
+# See CONTRIBUTING.md for the full convention.
+#
+# Skipped for: merge commits, reverts, and fixup!/squash!.
+
+msg_file="$1"
+
+# First non-empty, non-comment line = the header.
+header="$(grep -vE '^\s*#' "$msg_file" | grep -vE '^\s*$' | head -n1)"
+
+# --- Exemptions -----------------------------------------------------------
+case "$header" in
+  "Merge "*|"Revert "*) exit 0 ;;
+  "fixup! "*|"squash! "*) exit 0 ;;
+esac
+
+types="feat|fix|refactor|perf|test|docs|build|ci|chore|style|revert"
+
+fail() {
+  echo ""
+  echo "  ✗ Commit message does not follow Conventional Commits."
+  echo ""
+  echo "    $1"
+  echo ""
+  echo "    Got:      $header"
+  echo "    Expected: <type>(<scope>): <subject>"
+  echo "    Types:    $types"
+  echo "    Example:  feat(eventstore): add append-only writer"
+  echo ""
+  echo "    See CONTRIBUTING.md for the full convention."
+  echo ""
+  exit 1
+}
+
+# --- Format ---------------------------------------------------------------
+if ! printf '%s' "$header" | grep -qE "^($types)(\([a-z0-9-]+\))?(!)?: .+"; then
+  fail "Header must match: type(scope)?: subject"
+fi
+
+# --- Subject must not end with a period -----------------------------------
+case "$header" in
+  *.) fail "Subject must not end with a period." ;;
+esac
+
+# --- Header length (recommended <= 72 chars) ------------------------------
+len=$(printf '%s' "$header" | wc -c | tr -d ' ')
+if [ "$len" -gt 72 ]; then
+  fail "Header is $len chars; keep it under 72."
+fi
+
+exit 0
