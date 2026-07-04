@@ -23,7 +23,9 @@ internal/
 ├── command/          CQRS write side: command handler over the store
 ├── projection/       Folds events into the read model
 ├── query/            CQRS read side: read model + query handler
-└── api/http/         REST transport over the command and query handlers
+├── api/http/         REST transport over the command and query handlers
+└── infrastructure/
+    └── postgres/     Durable PostgreSQL event store
 ```
 
 ### Design notes
@@ -50,7 +52,20 @@ make test                # run all tests
 make help                # list all targets
 ```
 
-The store is in-memory, so data resets on restart.
+By default the store is in-memory, so data resets on restart.
+
+### Persistence (PostgreSQL)
+
+Set `DATABASE_URL` to use the durable event store. On startup the app migrates
+the schema and rebuilds the read model by replaying the event log.
+
+```bash
+make db-up                                    # start Postgres via docker compose
+export DATABASE_URL=postgres://expense:expense@localhost:5432/expense?sslmode=disable
+make run                                       # now persists across restarts
+make test-integration                          # run the Postgres integration tests
+make db-down                                    # stop and remove the database
+```
 
 ### API
 
@@ -78,7 +93,7 @@ Amounts are integers in the currency's minor unit (`1599` = 15.99 BRL).
 - [x] Command handler (write side)
 - [x] Read side: projection and queries
 - [x] HTTP API
-- [ ] Durable event store (PostgreSQL)
+- [x] Durable event store (PostgreSQL)
 
 ## Contributing
 
