@@ -1,9 +1,10 @@
 BINARY := expense-tracker
 CMD    := ./cmd/api
 ADDR   ?= :8080
+DATABASE_URL ?= postgres://expense:expense@localhost:5432/expense?sslmode=disable
 
 .DEFAULT_GOAL := help
-.PHONY: help run build test test-race cover vet fmt fmt-check tidy clean
+.PHONY: help run build test test-race test-integration cover vet fmt fmt-check tidy db-up db-down clean
 
 help: ## List available targets
 	@grep -E '^[a-zA-Z_-]+:.*?## ' $(MAKEFILE_LIST) | \
@@ -20,6 +21,15 @@ test: ## Run all tests
 
 test-race: ## Run all tests with the race detector
 	go test -race ./...
+
+test-integration: ## Run integration tests against DATABASE_URL (see db-up)
+	DATABASE_URL=$(DATABASE_URL) go test -tags integration ./...
+
+db-up: ## Start the PostgreSQL dev database via docker compose
+	docker compose up -d --wait
+
+db-down: ## Stop and remove the dev database and its volume
+	docker compose down -v
 
 cover: ## Report test coverage
 	go test -coverprofile=coverage.out ./...
