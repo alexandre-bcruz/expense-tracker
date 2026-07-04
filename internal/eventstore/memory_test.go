@@ -110,6 +110,30 @@ func TestLoadReturnsCopy(t *testing.T) {
 	}
 }
 
+func TestSubscribeReceivesAppendedEvents(t *testing.T) {
+	ctx := context.Background()
+	s := NewInMemory[fakeEvent]()
+
+	var got []string
+	s.Subscribe(func(events []fakeEvent) {
+		for _, e := range events {
+			got = append(got, e.name)
+		}
+	})
+
+	_ = s.Append(ctx, "s", 0, ev("a"), ev("b"))
+	_ = s.Append(ctx, "s", 2, ev("c"))
+	if len(got) != 3 || got[0] != "a" || got[2] != "c" {
+		t.Fatalf("subscriber received %v, want [a b c]", got)
+	}
+
+	// A conflicting append must not notify subscribers.
+	_ = s.Append(ctx, "s", 0, ev("x"))
+	if len(got) != 3 {
+		t.Fatalf("subscriber notified on conflict: %v", got)
+	}
+}
+
 func TestContextCancellation(t *testing.T) {
 	s := NewInMemory[fakeEvent]()
 	ctx, cancel := context.WithCancel(context.Background())

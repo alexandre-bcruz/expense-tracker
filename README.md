@@ -11,14 +11,21 @@ explicitly in [ADR-001](docs/adr/ADR-001.md).
 
 ## Architecture
 
-The write side is modeled as an event-sourced aggregate behind a command
-handler; the read side (projections and queries) is on the roadmap.
+The write side is an event-sourced aggregate behind a command handler. Writes
+append events to the store, a projection subscribed to the store folds them into
+a read model, and the query side serves reads from that model.
 
 ```
+cmd/api/              HTTP server entrypoint (wires everything together)
 internal/
 ├── domain/expense/   Expense aggregate, domain events, Money value object
 ├── eventstore/       Store[E] contract + in-memory implementation
-└── command/          CQRS write side: command handler over the store
+├── command/          CQRS write side: command handler over the store
+├── projection/       Folds events into the read model
+├── query/            CQRS read side: read model + query handler
+├── api/http/         REST transport over the command and query handlers
+└── infrastructure/
+    └── postgres/     Durable PostgreSQL event store
 ```
 
 ### Design notes
@@ -37,20 +44,56 @@ internal/
 
 - Go 1.26+
 
-## Running the tests
+## Running
 
 ```bash
-go test ./...
+make run                 # start the API on :8080 (ADDR=:9090 to override)
+make test                # run all tests
+make help                # list all targets
 ```
+
+By default the store is in-memory, so data resets on restart.
+
+### Persistence (PostgreSQL)
+
+Set `DATABASE_URL` to use the durable event store. On startup the app migrates
+the schema and rebuilds the read model by replaying the event log.
+
+```bash
+make db-up                                    # start Postgres via docker compose
+export DATABASE_URL=postgres://expense:expense@localhost:5432/expense?sslmode=disable
+make run                                       # now persists across restarts
+make test-integration                          # run the Postgres integration tests
+make db-down                                    # stop and remove the database
+```
+
+### API
+
+| Method | Path                        | Action                     |
+|--------|-----------------------------|----------------------------|
+| POST   | `/expenses`                 | record an expense          |
+| GET    | `/expenses`                 | list expenses              |
+| GET    | `/expenses/{id}`            | get one expense            |
+| PATCH  | `/expenses/{id}/amount`     | correct the amount         |
+| PATCH  | `/expenses/{id}/category`   | recategorize               |
+| DELETE | `/expenses/{id}`            | delete an expense          |
+
+```bash
+curl -X POST localhost:8080/expenses \
+  -d '{"amount_minor":1599,"currency":"BRL","category":"food","description":"lunch"}'
+curl localhost:8080/expenses
+```
+
+Amounts are integers in the currency's minor unit (`1599` = 15.99 BRL).
 
 ## Roadmap
 
 - [x] Expense aggregate and domain events
 - [x] Generic event store (in-memory)
 - [x] Command handler (write side)
-- [ ] Read side: projections and queries
-- [ ] Durable event store (PostgreSQL)
-- [ ] HTTP API
+- [x] Read side: projection and queries
+- [x] HTTP API
+- [x] Durable event store (PostgreSQL)
 
 ## Contributing
 
